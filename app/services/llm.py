@@ -26,8 +26,7 @@ class LLMError(RuntimeError):
 class JSONModel(Protocol):
     available: bool
 
-    def generate_json(self, system: str, prompt: str, temperature: float = 0.2,
-                      max_output_tokens: int = 4096) -> dict[str, Any]:
+    def generate_json(self, system: str, prompt: str, temperature: float = 0.2) -> dict[str, Any]:
         ...
 
 
@@ -51,10 +50,8 @@ def parse_json_response(text: str) -> dict[str, Any]:
 
 class GeminiClient:
     def __init__(self, api_key: str, model: str, timeout: int = 60,
-                 session: requests.Session | None = None, max_retries: int = 2,
-                 thinking_budget: int = 512) -> None:
+                 session: requests.Session | None = None, max_retries: int = 2) -> None:
         self._api_key = api_key
-        self._thinking_budget = max(0, thinking_budget)
         self._model = model
         self._timeout = timeout
         self._session = session or requests.Session()
@@ -64,27 +61,18 @@ class GeminiClient:
     def available(self) -> bool:
         return bool(self._api_key)
 
-    def build_payload(self, system: str, prompt: str, temperature: float, max_output_tokens: int) -> dict[str, Any]:
-        config: dict[str, Any] = {
-            "temperature": temperature,
-            "responseMimeType": "application/json",
-            "maxOutputTokens": max_output_tokens,
-        }
-        # Structured extraction doesn't benefit from long hidden reasoning. On Gemini 2.5
-        # Flash models, a small thinking budget cuts latency and token cost substantially.
-        if "2.5-flash" in self._model:
-            config["thinkingConfig"] = {"thinkingBudget": self._thinking_budget}
-        return {
-            "systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": config,
-        }
-
-    def generate_json(self, system: str, prompt: str, temperature: float = 0.2,
-                      max_output_tokens: int = 4096) -> dict[str, Any]:
+    def generate_json(self, system: str, prompt: str, temperature: float = 0.2) -> dict[str, Any]:
         if not self.available:
             raise LLMError("No API key configured")
-        payload = self.build_payload(system, prompt, temperature, max_output_tokens)
+        payload = {
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": temperature,
+                "responseMimeType": "application/json",
+                "maxOutputTokens": 8192,
+            },
+        }
         url = _ENDPOINT.format(model=self._model)
         # Key goes in a header, never the URL, so it can't leak into logs.
         headers = {"x-goog-api-key": self._api_key, "Content-Type": "application/json"}
@@ -108,11 +96,8 @@ class GeminiClient:
     @staticmethod
     def _extract_text(data: dict[str, Any]) -> str:
         try:
-            candidate = data["candidates"][0]
-            if candidate.get("finishReason") == "MAX_TOKENS":
-                raise LLMError("AI response was cut off (too long)")
-            parts = candidate["content"]["parts"]
-        except (KeyError, IndexError, TypeError, AttributeError) as exc:
+            parts = data["candidates"][0]["content"]["parts"]
+        except (KeyError, IndexError, TypeError) as exc:
             reason = (data.get("promptFeedback") or {}).get("blockReason") if isinstance(data, dict) else None
             raise LLMError(f"Empty AI response{f' ({reason})' if reason else ''}") from exc
         return "".join(p.get("text", "") for p in parts if isinstance(p, dict))

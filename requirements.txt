@@ -1,7 +1,4 @@
-# Version floors are set at releases that fix known vulnerabilities in earlier versions:
-#   flask 3.1.1, requests 2.32.4, pypdf 6.0.0 (malformed-stream memory exhaustion), waitress 3.0.1
-flask>=3.1.1,<4
-requests>=2.32.4,<3
-python-dotenv>=1.0.1,<2
-pypdf>=6.0.0,<7
-waitress>=3.0.1,<4
+flask>=3.0,<4
+requests>=2.31,<3
+python-dotenv>=1.0,<2
+pypdf>=4.0,<6

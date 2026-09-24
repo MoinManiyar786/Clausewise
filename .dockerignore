@@ -1,8 +1,0 @@
-.git
-.github
-.env*
-.vercel
-tests
-__pycache__
-*.pyc
-.venv

@@ -46,28 +46,21 @@ Decisions that adapt to the user's context:
 
 ## Security and responsible AI
 
-- **Privacy by default.** Emails, phone numbers, card numbers (Luhn-checked), SSNs, Aadhaar, PAN and IBANs are replaced with numbered placeholders *before* anything is sent to the model. Users can switch this off. Uploaded files are processed in memory and never written to disk or logged. JSON responses are sent with `Cache-Control: no-store`. The rate limiter stores hashed client IDs, never raw IP addresses.
+- **Privacy by default.** Emails, phone numbers, card numbers (Luhn-checked), SSNs, Aadhaar, PAN and IBANs are replaced with numbered placeholders *before* anything is sent to the model. Users can switch this off. Uploaded files are processed in memory and never written to disk. JSON responses are sent with `Cache-Control: no-store`.
 - **Prompt-injection resistance.** Document text is wrapped in `<document>` tags, closing tags inside the text are neutralised, and the system prompt declares document content untrusted. Documents containing instruction-like text are flagged to the user.
-- **Untrusted model output.** Every field is type-checked, trimmed, length-capped and forced into allowed enum values before reaching the browser. Truncated model output is detected and rejected rather than half-parsed.
+- **Untrusted model output.** Every field is type-checked, trimmed, length-capped and forced into allowed enum values before reaching the browser.
 - **XSS-safe UI.** The front end builds all dynamic content with `textContent`; it never uses `innerHTML` with data.
-- **Cross-site request blocking.** State-changing requests are rejected with 403 when `Sec-Fetch-Site` reports a cross-site origin, or when the `Origin` header doesn't match the host. No CORS headers are sent, so other sites can't read responses.
-- **HTTP hardening.** Strict Content-Security-Policy (`default-src 'self'`, no inline scripts, no third-party origins), HSTS over HTTPS, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy: same-origin`, and a restrictive Permissions-Policy.
-- **Abuse limits.** Per-client rate limiting (20 requests/minute by default), 512 KB cap on JSON bodies, 5 MB cap on uploads, 60-page PDF cap, 60,000-character document cap, file type verified by content signature. Behind a proxy, `TRUST_PROXY_HOPS` makes rate limiting use the real client IP without letting clients spoof it.
-- **Production server.** `run.py` serves through Waitress (a production WSGI server) with its version banner hidden; Flask's debug server is only used when `FLASK_DEBUG=1`. The Docker image runs as a non-root user.
-- **Dependency hygiene.** Minimum versions sit above releases with known vulnerabilities, and Dependabot watches for new advisories. See `SECURITY.md`.
+- **HTTP hardening.** Strict Content-Security-Policy (`default-src 'self'`, no inline scripts, no third-party origins), `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, a restrictive Permissions-Policy.
+- **Abuse limits.** Per-client rate limiting (20 requests/minute by default), 5 MB upload cap, 60-page PDF cap, 60,000-character document cap, file type verified by content signature.
 - **Secret handling.** The API key is read from `.env` (git-ignored), sent in a request header rather than the URL, and never logged or returned. Internal errors return a generic message.
 - **Honest scope.** A disclaimer is shown on every result, and the model is instructed to explain options rather than tell users what to do.
 
 ## Efficiency
 
-- **One model call per action**, using Gemini's JSON response mode at low temperature: no multi-step chains.
-- **Right-sized model budgets.** Output caps are sized per task (1.5k tokens for a question, up to 6k for a full analysis) instead of one large default. On Gemini 2.5 Flash, hidden "thinking" is capped at 512 tokens, which cuts latency and cost for structured extraction.
-- **Two-level caching.** An LRU + TTL cache keyed by a SHA-256 hash of the prompt makes repeated requests instant and free. A second cache stores each document after redaction, so follow-up questions skip that work.
-- **Lean responses.** Analysis results don't echo the document back unless redaction changed it; the browser reuses its own copy for highlighting. Text responses are gzip-compressed (the sample lease analysis drops from 9.3 KB to 2.3 KB).
-- **Browser caching.** Static assets are versioned and cached for a day; the page shell revalidates on each load.
-- **Fast local rules.** Regex patterns are compiled once at import, and each runs a single pass. PDF extraction stops once the character limit is reached.
-- **Bounded requests.** The browser aborts requests after 90 seconds; the server retries only transient errors (429/5xx) with exponential backoff.
-- **Small footprint.** Five small dependencies; Gemini is called over REST instead of pulling in an SDK. No front-end framework, no external fonts or CDNs. The whole repository is well under 1 MB.
+- One model call per action, using Gemini's JSON response mode at low temperature: no multi-step chains.
+- An in-memory LRU + TTL cache keyed by a SHA-256 hash of the prompt means repeated requests are instant and free.
+- Local rules run in milliseconds and give the model hints, which keeps prompts focused.
+- Only four small dependencies (Flask, requests, python-dotenv, pypdf); Gemini is called over REST instead of pulling in an SDK. No front-end framework, no external fonts or CDNs. The whole repository is well under 1 MB.
 
 ## Accessibility
 
@@ -85,7 +78,7 @@ Decisions that adapt to the user's context:
 ```
 clausewise/
 ├── app/
-│   ├── __init__.py          # app factory, security guards, compression, caching
+│   ├── __init__.py          # app factory, security headers, dependency wiring
 │   ├── config.py            # settings from environment
 │   ├── routes.py            # thin HTTP layer + error mapping
 │   └── services/
@@ -99,10 +92,8 @@ clausewise/
 │       ├── cache.py         # TTL + LRU cache
 │       └── ratelimit.py     # sliding-window rate limiter
 ├── static/                  # index.html, styles.css, app.js, samples.js
-├── tests/                   # 86 tests: unit, logic, API, hardening
-├── .github/                 # CI workflow + Dependabot
-├── Dockerfile               # non-root production image
-├── SECURITY.md
+├── tests/                   # 66 tests: unit, logic and API
+├── .github/workflows/       # CI running the test suite
 ├── .env.example
 ├── requirements.txt
 └── run.py
@@ -123,15 +114,12 @@ python run.py
 
 Open http://127.0.0.1:8000 and click **Try a sample lease**. Without a key the app runs in offline mode and says so in the page header.
 
-With Docker: `docker build -t clausewise . && docker run -p 8080:8080 --env-file .env clausewise`, then open http://127.0.0.1:8080.
-
 Environment variables (`.env`):
 
 | Name | Required | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | For AI features | Google AI Studio key |
 | `GEMINI_MODEL` | No | Defaults to `gemini-2.5-flash` |
-| `TRUST_PROXY_HOPS` | No | Set to `1` when deployed behind a load balancer (the Dockerfile does this) |
 
 ## Testing
 
@@ -140,7 +128,7 @@ pip install -r requirements-dev.txt
 python -m pytest            # or: python -m unittest discover
 ```
 
-The suite uses a fake model, so it needs no network or API key. It covers the rules engine (document types, role-weighted severity, urgency, readability, injection detection, quote matching), redaction, input validation and output coercion, the cache and rate limiter, the Gemini client (header-based auth, retries on transient errors, no retry on client errors, blocked responses), the decision logic (hallucinated quotes flagged, missed risks merged, PII never reaching the model, caching, fallback on failure, escalation for urgent documents, answer downgrading when ungrounded), and every API endpoint including security headers, upload validation, rate limiting and error-message hygiene. Hardening tests cover cross-site blocking, JSON size caps, HSTS, proxy handling, hashed rate-limit keys, gzip, cache headers, per-task token budgets, the thinking budget, truncated-output detection and document-cache reuse.
+The suite uses a fake model, so it needs no network or API key. It covers the rules engine (document types, role-weighted severity, urgency, readability, injection detection, quote matching), redaction, input validation and output coercion, the cache and rate limiter, the Gemini client (header-based auth, retries on transient errors, no retry on client errors, blocked responses), the decision logic (hallucinated quotes flagged, missed risks merged, PII never reaching the model, caching, fallback on failure, escalation for urgent documents, answer downgrading when ungrounded), and every API endpoint including security headers, upload validation, rate limiting and error-message hygiene.
 
 ## API
 

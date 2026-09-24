@@ -76,11 +76,6 @@ class RedFlag:
     severity: str
     why: str
     role_severity: dict[str, str] = field(default_factory=dict)
-    compiled: tuple[re.Pattern[str], ...] = field(init=False, repr=False, compare=False)
-
-    def __post_init__(self) -> None:
-        # Compile once at import time instead of on every request.
-        object.__setattr__(self, "compiled", tuple(re.compile(p, re.IGNORECASE) for p in self.patterns))
 
 
 RED_FLAGS: tuple[RedFlag, ...] = (
@@ -147,11 +142,11 @@ RED_FLAGS: tuple[RedFlag, ...] = (
 # --------------------------------------------------------------------------- #
 # Urgency
 # --------------------------------------------------------------------------- #
-_URGENT_PATTERNS = tuple(re.compile(p) for p in (
+_URGENT_PATTERNS = (
     r"\bsummons\b", r"\beviction\b", r"notice to (?:quit|vacate)", r"cease and desist",
     r"\bfinal (?:notice|demand|warning)\b", r"\bhearing\b", r"\bwarrant\b", r"\bforeclos",
     r"appear (?:before|in) (?:the )?court", r"legal (?:action|proceedings) will be",
-))
+)
 _DEADLINE_PATTERN = re.compile(
     r"within\s+(\d{1,3})\s*(?:\(\w+\)\s*)?(calendar\s+|business\s+|working\s+)?(day|days|hours|week|weeks)",
     re.IGNORECASE,
@@ -167,7 +162,7 @@ class Urgency:
 
 def detect_urgency(text: str) -> Urgency:
     lower = text.lower()
-    reasons = [m.group(0) for m in (p.search(lower) for p in _URGENT_PATTERNS) if m]
+    reasons = [re.search(p, lower).group(0) for p in _URGENT_PATTERNS if re.search(p, lower)]
     shortest: int | None = None
     for match in _DEADLINE_PATTERN.finditer(text):
         amount, unit = int(match.group(1)), match.group(3).lower()
@@ -216,8 +211,8 @@ def scan_red_flags(text: str, role: str = "general") -> list[dict]:
     """Return one finding per triggered red flag, sorted by severity."""
     findings = []
     for flag in RED_FLAGS:
-        for pattern in flag.compiled:
-            match = pattern.search(text)
+        for pattern in flag.patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 findings.append({
                     "id": flag.id,
