@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ClauseWise explains contracts, leases, notices and policies in plain language, marks risky clauses and helps you prepare for a lawyer.">
+  <title>ClauseWise: understand legal documents in plain language</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231B2340'/%3E%3Crect x='6' y='17' width='20' height='6' fill='%23FFE45C'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/samples.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to the document tools</a>
+
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="/" aria-label="ClauseWise home">
+        <span class="brand-mark" aria-hidden="true"></span>ClauseWise
+      </a>
+      <div class="display-controls" role="group" aria-label="Display settings">
+        <button type="button" class="ghost" id="text-smaller" aria-label="Make text smaller">A−</button>
+        <button type="button" class="ghost" id="text-larger" aria-label="Make text larger">A+</button>
+        <button type="button" class="ghost" id="contrast-toggle" aria-pressed="false">High contrast</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div>
+        <h1 id="hero-title">Know what you’re signing.</h1>
+        <p class="lede">Paste a contract, lease, notice or policy. ClauseWise explains it in plain words,
+          marks the risky parts, answers your questions, and helps you get ready to talk to a lawyer.</p>
+        <p class="ai-status" id="ai-status" role="status">Checking the AI service…</p>
+      </div>
+      <figure class="hero-demo" aria-label="Example of a clause explained">
+        <p class="demo-clause">“Tenant shall <mark class="hl hl-high">indemnify and hold harmless the Landlord from any and all claims</mark> arising from the use of the Premises.”</p>
+        <figcaption class="demo-note"><strong>In plain words:</strong> if anyone makes a claim about the flat, you may have to pay the landlord’s costs, even when it isn’t your fault.</figcaption>
+      </figure>
+    </section>
+
+    <div class="wrap layout" id="workspace">
+      <aside class="context-panel" aria-labelledby="context-title">
+        <h2 id="context-title">About you</h2>
+        <p class="hint">This changes how risks are judged and how things are explained.</p>
+
+        <label for="role">I am the</label>
+        <select id="role">
+          <option value="general">Person signing (general)</option>
+          <option value="tenant">Tenant / renter</option>
+          <option value="landlord">Landlord</option>
+          <option value="employee">Employee / job candidate</option>
+          <option value="employer">Employer</option>
+          <option value="freelancer">Freelancer / contractor</option>
+          <option value="client">Client hiring someone</option>
+          <option value="consumer">Customer / app user</option>
+          <option value="small_business">Small business owner</option>
+        </select>
+
+        <label for="jurisdiction">Country or state <span class="optional">(optional)</span></label>
+        <input id="jurisdiction" type="text" maxlength="60" autocomplete="country-name" placeholder="e.g. Maharashtra, India">
+
+        <fieldset>
+          <legend>Explain it</legend>
+          <label class="choice"><input type="radio" name="reading_level" value="plain" checked> Simply</label>
+          <label class="choice"><input type="radio" name="reading_level" value="standard"> With some legal terms</label>
+          <label class="choice"><input type="radio" name="reading_level" value="detailed"> In full detail</label>
+        </fieldset>
+
+        <label for="language">Answer in</label>
+        <select id="language">
+          <option>English</option><option>Hindi</option><option>Spanish</option><option>French</option>
+          <option>German</option><option>Portuguese</option><option>Tamil</option><option>Telugu</option>
+          <option>Bengali</option><option>Marathi</option><option>Arabic</option><option>Chinese</option>
+        </select>
+
+        <label class="choice privacy">
+          <input type="checkbox" id="redact" checked>
+          Hide emails, phone and ID numbers before analysis
+        </label>
+      </aside>
+
+      <section class="tools" aria-labelledby="doc-title">
+        <div class="doc-input">
+          <div class="doc-input-head">
+            <h2 id="doc-title">Your document</h2>
+            <div class="doc-actions">
+              <label class="button ghost file-button">
+                Upload file
+                <input type="file" id="file-input" accept=".pdf,.txt,.md,application/pdf,text/plain" class="visually-hidden">
+              </label>
+              <button type="button" class="ghost" id="sample-button">Try a sample lease</button>
+            </div>
+          </div>
+          <label for="doc-text" class="visually-hidden">Document text</label>
+          <textarea id="doc-text" rows="10" aria-describedby="doc-help doc-count"
+            placeholder="Paste the full text of your document here…"></textarea>
+          <p class="hint" id="doc-help">PDF, TXT or MD up to 5 MB. Files are read in memory and never stored. <span id="doc-count" aria-live="polite">0 characters</span></p>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="What do you want to do?">
+          <button role="tab" id="tab-understand" aria-controls="panel-understand" aria-selected="true">Understand it</button>
+          <button role="tab" id="tab-ask" aria-controls="panel-ask" aria-selected="false" tabindex="-1">Ask a question</button>
+          <button role="tab" id="tab-compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1">Compare versions</button>
+          <button role="tab" id="tab-prepare" aria-controls="panel-prepare" aria-selected="false" tabindex="-1">Prepare for a lawyer</button>
+        </div>
+
+        <div role="tabpanel" id="panel-understand" aria-labelledby="tab-understand" class="panel">
+          <p>Get a plain summary, every risky clause marked in your document, your obligations and deadlines, and a checklist.</p>
+          <button type="button" class="primary" id="run-analyze">Explain this document</button>
+        </div>
+
+        <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" class="panel" hidden>
+          <form id="ask-form" novalidate>
+            <label for="question">Your question about the document</label>
+            <div class="inline-field">
+              <input id="question" type="text" maxlength="1000" placeholder="e.g. Can I leave before the lease ends?" autocomplete="off">
+              <button type="submit" class="primary">Ask</button>
+            </div>
+          </form>
+          <ol class="qa-log" id="qa-log" aria-live="polite" aria-label="Questions and answers"></ol>
+        </div>
+
+        <div role="tabpanel" id="panel-compare" aria-labelledby="tab-compare" class="panel" hidden>
+          <p>Your document above is version A. Paste the other version or offer as version B.</p>
+          <label for="doc-text-b">Version B</label>
+          <textarea id="doc-text-b" rows="8" placeholder="Paste the other version here…"></textarea>
+          <div class="doc-actions">
+            <button type="button" class="ghost" id="sample-b-button">Use sample revised lease</button>
+            <button type="button" class="primary" id="run-compare">Compare A and B</button>
+          </div>
+        </div>
+
+        <div role="tabpanel" id="panel-prepare" aria-labelledby="tab-prepare" class="panel" hidden>
+          <label for="situation">What’s happening, in your own words</label>
+          <textarea id="situation" rows="5" maxlength="3000" aria-describedby="situation-help"
+            placeholder="e.g. My landlord says I must leave in 7 days and keep my deposit because of a stain on the carpet."></textarea>
+          <p class="hint" id="situation-help">The document is optional here. You’ll get questions to ask, papers to gather and a draft email.</p>
+          <button type="button" class="primary" id="run-prepare">Build my lawyer brief</button>
+        </div>
+
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+        <div id="error" class="error" role="alert" hidden></div>
+      </section>
+    </div>
+
+    <section class="wrap results" id="results" aria-label="Results" tabindex="-1" hidden></section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p><strong>ClauseWise gives legal information, not legal advice.</strong> It can make mistakes. Laws differ by place and situation.
+        For anything important, speak with a qualified lawyer or a free legal aid service near you.</p>
+    </div>
+  </footer>
+</body>
+</html>

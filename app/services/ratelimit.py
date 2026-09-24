@@ -1,0 +1,31 @@
+"""In-memory sliding-window rate limiter keyed by client identifier."""
+from __future__ import annotations
+
+import threading
+import time
+from collections import defaultdict, deque
+
+
+class RateLimiter:
+    def __init__(self, limit: int, window_seconds: float = 60.0) -> None:
+        self.limit = limit
+        self.window = window_seconds
+        self._hits: defaultdict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def allow(self, client_id: str) -> bool:
+        if self.limit <= 0:
+            return True
+        now = time.monotonic()
+        with self._lock:
+            hits = self._hits[client_id]
+            while hits and now - hits[0] > self.window:
+                hits.popleft()
+            if len(hits) >= self.limit:
+                return False
+            hits.append(now)
+            if len(self._hits) > 10_000:  # bound memory under many distinct clients
+                stale = [k for k, v in self._hits.items() if not v or now - v[-1] > self.window]
+                for key in stale:
+                    del self._hits[key]
+            return True
