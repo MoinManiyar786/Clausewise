@@ -9,5 +9,7 @@ htmlcov/
 *.log
 .DS_Store
 
-.vercel
-.env*
+# Local Vercel project metadata and secrets
+.vercel/
+.env.local
+.env.*.local

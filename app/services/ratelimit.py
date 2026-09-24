@@ -1,6 +1,7 @@
 """In-memory sliding-window rate limiter keyed by client identifier."""
 from __future__ import annotations
 
+import hashlib
 import threading
 import time
 from collections import defaultdict, deque
@@ -13,12 +14,18 @@ class RateLimiter:
         self._hits: defaultdict[str, deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
 
+    @staticmethod
+    def _key(client_id: str) -> str:
+        # Store a hash, never the raw IP address, so memory holds no personal data.
+        return hashlib.sha256(client_id.encode("utf-8")).hexdigest()[:24]
+
     def allow(self, client_id: str) -> bool:
         if self.limit <= 0:
             return True
         now = time.monotonic()
+        key = self._key(client_id)
         with self._lock:
-            hits = self._hits[client_id]
+            hits = self._hits[key]
             while hits and now - hits[0] > self.window:
                 hits.popleft()
             if len(hits) >= self.limit:

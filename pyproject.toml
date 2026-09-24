@@ -4,10 +4,11 @@ version = "1.0.0"
 description = "GenAI assistant that makes legal documents understandable for everyday people."
 requires-python = ">=3.10"
 dependencies = [
-    "flask>=3.0,<4",
-    "requests>=2.31,<3",
-    "python-dotenv>=1.0,<2",
-    "pypdf>=4.0,<6",
+    "flask>=3.1.1,<4",
+    "requests>=2.32.4,<3",
+    "python-dotenv>=1.0.1,<2",
+    "pypdf>=6.0.0,<7",
+    "waitress>=3.0.1,<4",
 ]
 
 [tool.pytest.ini_options]
