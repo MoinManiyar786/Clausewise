@@ -8,3 +8,6 @@ venv/
 htmlcov/
 *.log
 .DS_Store
+
+.vercel
+.env*
