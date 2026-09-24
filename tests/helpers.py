@@ -27,9 +27,12 @@ class FakeLLM:
         self.error = error
         self.available = available
         self.calls: list[str] = []
+        self.max_tokens: list[int] = []
 
-    def generate_json(self, system: str, prompt: str, temperature: float = 0.2) -> dict:
+    def generate_json(self, system: str, prompt: str, temperature: float = 0.2,
+                      max_output_tokens: int = 4096) -> dict:
         self.calls.append(prompt)
+        self.max_tokens.append(max_output_tokens)
         if self.error:
             raise self.error
         return dict(self.response)

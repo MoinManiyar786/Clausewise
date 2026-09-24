@@ -32,6 +32,9 @@ DISCLAIMER = ("ClauseWise gives general legal information, not legal advice. "
 
 HIGH_STAKES_TYPES = {"court_or_legal_notice", "loan_or_credit"}
 
+# Output budgets sized to each task's JSON schema: short answers stay cheap.
+MAX_OUTPUT_TOKENS = {"analyze": 6144, "compare": 4096, "prepare": 3072, "ask": 1536}
+
 
 class LegalAssistant:
     def __init__(self, llm: JSONModel, cache: TTLCache, max_doc_chars: int = 60_000,
@@ -40,17 +43,23 @@ class LegalAssistant:
         self.cache = cache
         self.max_doc_chars = max_doc_chars
         self.max_question_chars = max_question_chars
+        # Redaction is the costliest local step; follow-up questions reuse it.
+        self._prepared = TTLCache(max_size=64, ttl_seconds=1800)
 
     # ------------------------------------------------------------------ #
     # Shared helpers
     # ------------------------------------------------------------------ #
     def _prepare(self, raw_text: Any, ctx: UserContext, label: str = "document") -> tuple[str, dict]:
         text = require_document(raw_text, self.max_doc_chars, label)
-        redactions: dict[str, int] = {}
-        if ctx.redact_pii:
+        if not ctx.redact_pii:
+            return text, {}
+        key = make_key("prepared", text)
+        cached = self._prepared.get(key)
+        if cached is None:
             result = redact(text)
-            text, redactions = result.text, result.counts
-        return text, redactions
+            cached = (result.text, result.counts)
+            self._prepared.set(key, cached)
+        return cached[0], dict(cached[1])
 
     def _call(self, task: str, prompt: str, coerce: Callable[[dict], dict]) -> dict | None:
         """Cached AI call. Returns None on any failure so callers can fall back."""
@@ -61,7 +70,8 @@ class LegalAssistant:
         if cached is not None:
             return {**cached, "_cached": True}
         try:
-            result = coerce(self.llm.generate_json(prompts.SYSTEM, prompt))
+            result = coerce(self.llm.generate_json(prompts.SYSTEM, prompt,
+                                                   max_output_tokens=MAX_OUTPUT_TOKENS.get(task, 4096)))
         except LLMError as exc:
             log.warning("AI call for %s failed: %s", task, exc)
             return None
@@ -111,6 +121,7 @@ class LegalAssistant:
     # ------------------------------------------------------------------ #
     def analyze(self, raw_text: Any, ctx: UserContext) -> dict:
         text, redactions = self._prepare(raw_text, ctx)
+        submitted = raw_text.strip() if isinstance(raw_text, str) else ""
         doc_type = rules.detect_doc_type(text)
         urgency = rules.detect_urgency(text)
         findings = rules.scan_red_flags(text, ctx.role)
@@ -132,7 +143,9 @@ class LegalAssistant:
         result["professional_help"] = self._decide_professional(
             doc_type, urgency, result["clauses"], result.pop("needs_professional", False),
             result.pop("professional_reason", ""))
-        result["document"] = {"text": text, "type": doc_type, "type_label": rules.DOC_TYPE_LABELS[doc_type],
+        # Highlight offsets refer to the analysed text. Send it back only when it differs from
+        # what the browser submitted (e.g. after redaction); otherwise the client reuses its copy.
+        result["document"] = {"text": text if text != submitted else None, "type": doc_type, "type_label": rules.DOC_TYPE_LABELS[doc_type],
                               "readability": rules.readability(text), "characters": len(text)}
         result["urgency"] = {"level": urgency.level, "reasons": urgency.reasons,
                              "shortest_deadline_days": urgency.shortest_deadline_days}

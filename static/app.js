@@ -55,12 +55,24 @@
     box.hidden = !message;
   }
 
+  const TIMEOUT_MS = 90000;
+
   async function api(path, body) {
-    const res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      throw new Error(err.name === "AbortError" ? "This is taking too long. Please try again." : "Couldn't reach the server. Check your connection.");
+    } finally {
+      clearTimeout(timer);
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Request failed (${res.status}).`);
     return data;
@@ -140,10 +152,10 @@
   }
 
   /* ------------------------------------------------------------ 1. understand */
-  function markedDocument(doc, clauses) {
+  function markedDocument(doc, clauses, submitted) {
     const spans = clauses.filter((c) => c.span).map((c) => ({ start: c.span[0], end: c.span[1], risk: c.risk, title: c.title }))
       .sort((a, b) => a.start - b.start);
-    const text = doc.text;
+    const text = doc.text ?? submitted; // server omits text when unchanged, to save bandwidth
     const out = [];
     let cursor = 0;
     for (const s of spans) {
@@ -163,7 +175,7 @@
       el("div", { class: "doc-view", tabindex: "0", "aria-label": "Document with highlighted clauses" }, out));
   }
 
-  function renderAnalysis(d) {
+  function renderAnalysis(d, submitted) {
     const rc = d.risk_counts;
     const facts = el("dl", { class: "facts" },
       el("div", {}, el("dt", { text: "Type" }), el("dd", { text: d.document.type_label })),
@@ -192,7 +204,7 @@
         text: "This document contains text that looks like instructions to an AI. ClauseWise ignored it, but be cautious about where the document came from." }) : null,
       facts,
       section("Summary", el("p", { class: "summary", id: "summary-text", text: d.summary }), list(d.key_points)),
-      markedDocument(d.document, d.clauses),
+      markedDocument(d.document, d.clauses, submitted),
       d.clauses.length ? section("Clauses to look at", el("ol", { class: "clauses" }, clauseCards)) : null,
       d.obligations.length ? section("Who has to do what", table(d.obligations, [["party", "Who"], ["obligation", "Must do"]])) : null,
       d.deadlines.length ? section("Dates and deadlines", table(d.deadlines, [["what", "What"], ["when", "When"]])) : null,
@@ -279,7 +291,7 @@
     if (Array.isArray(value)) return value.map((v) => toPlainText(v, indent + "  ")).join("\n");
     if (value && typeof value === "object") {
       return Object.entries(value)
-        .filter(([k, v]) => !["span", "meta", "document", "verified", "source"].includes(k) && v !== "" && !(Array.isArray(v) && !v.length))
+        .filter(([k, v]) => !["span", "meta", "document", "verified", "source"].includes(k) && v !== "" && v !== null && !(Array.isArray(v) && !v.length))
         .map(([k, v]) => `${indent}${k.replace(/_/g, " ")}:${typeof v === "object" ? "\n" : " "}${toPlainText(v, indent + "  ")}`).join("\n");
     }
     return `${indent}${value}`;
@@ -372,8 +384,10 @@
       }).finally(() => { e.target.value = ""; });
     });
 
-    $("#run-analyze").addEventListener("click", () => run("Reading your document. This can take up to a minute…",
-      async () => renderAnalysis(await api("/api/analyze", { text: docText(), context: getContext() }))));
+    $("#run-analyze").addEventListener("click", () => run("Reading your document. This can take up to a minute…", async () => {
+      const text = docText();
+      renderAnalysis(await api("/api/analyze", { text, context: getContext() }), text);
+    }));
 
     $("#ask-form").addEventListener("submit", (e) => {
       e.preventDefault();

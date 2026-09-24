@@ -104,6 +104,6 @@ def extract():
     upload = request.files.get("file")
     if upload is None:
         raise ValidationError("Please choose a file to upload.")
-    text = extract_text(upload.filename or "", upload.read(), current_app.config["MAX_PDF_PAGES"])
     limit = current_app.config["MAX_DOC_CHARS"]
+    text = extract_text(upload.filename or "", upload.read(), current_app.config["MAX_PDF_PAGES"], limit)
     return jsonify(text=text[:limit], truncated=len(text) > limit, characters=min(len(text), limit))

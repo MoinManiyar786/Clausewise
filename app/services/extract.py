@@ -12,7 +12,7 @@ from .validation import ValidationError
 ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf"}
 
 
-def extract_text(filename: str, data: bytes, max_pdf_pages: int = 60) -> str:
+def extract_text(filename: str, data: bytes, max_pdf_pages: int = 60, max_chars: int = 60_000) -> str:
     name = (filename or "").lower()
     ext = name[name.rfind("."):] if "." in name else ""
     if ext not in ALLOWED_EXTENSIONS:
@@ -23,7 +23,7 @@ def extract_text(filename: str, data: bytes, max_pdf_pages: int = 60) -> str:
     if ext == ".pdf":
         if not data.startswith(b"%PDF"):
             raise ValidationError("This file does not look like a valid PDF.")
-        return _pdf_text(data, max_pdf_pages)
+        return _pdf_text(data, max_pdf_pages, max_chars)
 
     if b"\x00" in data[:4096]:
         raise ValidationError("This file looks like a binary file, not text.")
@@ -35,7 +35,7 @@ def extract_text(filename: str, data: bytes, max_pdf_pages: int = 60) -> str:
     raise ValidationError("Could not read the text in this file.")  # pragma: no cover
 
 
-def _pdf_text(data: bytes, max_pages: int) -> str:
+def _pdf_text(data: bytes, max_pages: int, max_chars: int) -> str:
     try:
         from pypdf import PdfReader
         from pypdf.errors import PdfReadError
@@ -47,7 +47,15 @@ def _pdf_text(data: bytes, max_pages: int) -> str:
             raise ValidationError("This PDF is password-protected. Please upload an unlocked copy.")
         if len(reader.pages) > max_pages:
             raise ValidationError(f"This PDF has more than {max_pages} pages. Please upload the relevant pages only.")
-        text = "\n\n".join((page.extract_text() or "") for page in reader.pages)
+        chunks: list[str] = []
+        total = 0
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            chunks.append(page_text)
+            total += len(page_text)
+            if total > max_chars:  # stop early: the rest would be discarded anyway
+                break
+        text = "\n\n".join(chunks)
     except ValidationError:
         raise
     except (PdfReadError, ValueError, KeyError, TypeError) as exc:

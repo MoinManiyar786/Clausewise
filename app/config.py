@@ -28,6 +28,10 @@ class Settings:
     cache_size: int = 128
     cache_ttl_seconds: int = 1800
     llm_timeout_seconds: int = 60
+    llm_thinking_budget: int = 512       # tokens of hidden reasoning on Gemini 2.5 Flash
+    max_json_bytes: int = 512 * 1024     # two 60k-char documents fit comfortably
+    static_max_age: int = 86_400
+    trust_proxy_hops: int = 0            # set to 1 behind Cloud Run / a load balancer
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -35,4 +39,5 @@ class Settings:
             gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
             gemini_model=os.getenv("GEMINI_MODEL", "").strip() or cls.gemini_model,
             rate_limit_per_minute=_int_env("RATE_LIMIT_PER_MINUTE", cls.rate_limit_per_minute),
+            trust_proxy_hops=max(0, _int_env("TRUST_PROXY_HOPS", cls.trust_proxy_hops)),
         )
